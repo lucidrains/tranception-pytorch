@@ -1,6 +1,6 @@
 ## Tranception - Pytorch (wip)
 
-Implementation of Tranception, an attention network, paired with retrieval, that is SOTA for protein fitness prediction. The Transformer architecture is inspired by <a href="https://arxiv.org/abs/2109.08668">Primer</a>, and uses <a href="https://arxiv.org/abs/2108.12409">ALiBi relative positional encoding</a>
+Implementation of <a href="https://arxiv.org/abs/2205.13760">Tranception</a>, an attention network, paired with retrieval, that is SOTA for protein fitness prediction. The Transformer architecture is inspired by <a href="https://arxiv.org/abs/2109.08668">Primer</a>, and uses <a href="https://arxiv.org/abs/2108.12409">ALiBi relative positional encoding</a>
 
 ## Citations
 
