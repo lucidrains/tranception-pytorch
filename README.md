@@ -32,6 +32,7 @@ logits = model(amino_acids) # (1, 512, 21)
 
 - [x] grouped heads with customizable depthwise convs (for variable k-mers), as well as grouped alibi pos bias
 - [ ] figure out attention to retrieved (looks like axial attention?)
+- [ ] play around with protein gym, and start betting on huggingface's accelerate
 
 ## Citations
 
