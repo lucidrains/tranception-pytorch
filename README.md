@@ -26,6 +26,11 @@ amino_acids = torch.randint(0, 21, (1, 512))
 logits = model(amino_acids) # (1, 512, 21)
 ```
 
+## Todo
+
+- [ ] grouped heads with customizable depthwise convs (for variable k-mers), as well as grouped alibi pos bias
+- [ ] figure out attention to retrieved (looks like axial attention?)
+
 ## Citations
 
 ```bibtex
