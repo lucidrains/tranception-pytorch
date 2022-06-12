@@ -108,6 +108,7 @@ class CausalAttention(nn.Module):
 
         # ds convs with different kernel sizes for 4 groups of heads
 
+        self.groups = len(ds_conv_kernel_sizes)
         self.qkv_ds_convs = nn.ModuleList([])
 
         for _ in range(3): # for queries, keys, values
@@ -124,7 +125,7 @@ class CausalAttention(nn.Module):
 
         # learned alibi positional bias for 4 groups of heads
 
-        self.learned_alibi_pos_biases = nn.ModuleList([LearnedAlibiPosBias(heads = heads // 4) for _ in range(4)])
+        self.learned_alibi_pos_biases = nn.ModuleList([LearnedAlibiPosBias(heads = heads // self.groups) for _ in range(self.groups)])
 
         # outward projection
 
@@ -144,7 +145,7 @@ class CausalAttention(nn.Module):
             projs, ds_convs = args
             batch = projs.shape[0]
 
-            projs = rearrange_many(projs.split(self.heads // 4, dim = 1), 'b h n d -> (b h) n d')
+            projs = rearrange_many(projs.split(self.heads // self.groups, dim = 1), 'b h n d -> (b h) n d')
             conv_out = [fn(t) for fn, t in zip(ds_convs, projs)]
             conv_out = map(lambda t: rearrange(t, '(b h) d n -> b h d n', b = batch), conv_out)
             return torch.cat(tuple(conv_out), dim = 1)
@@ -159,7 +160,7 @@ class CausalAttention(nn.Module):
         # learned alibi pos bias across 4 groups of heads
         # so heads specialize to looking at different distances of kmers
 
-        grouped_sims = sim.split(self.heads // 4, dim = 1)
+        grouped_sims = sim.split(self.heads // self.groups, dim = 1)
         grouped_sims = [(alibi(sim_group) + sim_group) for alibi, sim_group in zip(self.learned_alibi_pos_biases, grouped_sims)]
         grouped_sims = torch.cat(grouped_sims, dim = 1)
 
@@ -190,7 +191,8 @@ class Tranception(nn.Module):
         num_tokens = 21,
         heads = 8,
         dim_head = 64,
-        ff_mult = 4
+        ff_mult = 4,
+        ds_conv_kernel_sizes = (0, 3, 5, 7)
     ):
         super().__init__()
         self.token_emb = nn.Embedding(num_tokens, dim)
@@ -198,7 +200,7 @@ class Tranception(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                CausalAttention(dim = dim, heads = heads, dim_head = dim_head),
+                CausalAttention(dim = dim, heads = heads, dim_head = dim_head, ds_conv_kernel_sizes = ds_conv_kernel_sizes),
                 FeedForward(dim, mult = ff_mult)
             ]))
 
