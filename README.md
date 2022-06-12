@@ -1,3 +1,5 @@
+<img src="./tranception.png" width="450px"></img>
+
 ## Tranception - Pytorch (wip)
 
 Implementation of <a href="https://arxiv.org/abs/2205.13760">Tranception</a>, an attention network, paired with retrieval, that is SOTA for protein fitness prediction. The Transformer architecture is inspired by <a href="https://arxiv.org/abs/2109.08668">Primer</a>, and uses <a href="https://arxiv.org/abs/2108.12409">ALiBi relative positional encoding</a>
@@ -28,7 +30,7 @@ logits = model(amino_acids) # (1, 512, 21)
 
 ## Todo
 
-- [ ] grouped heads with customizable depthwise convs (for variable k-mers), as well as grouped alibi pos bias
+- [x] grouped heads with customizable depthwise convs (for variable k-mers), as well as grouped alibi pos bias
 - [ ] figure out attention to retrieved (looks like axial attention?)
 
 ## Citations
