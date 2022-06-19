@@ -96,10 +96,14 @@ class CausalAttention(nn.Module):
         ds_conv_kernel_sizes = (0, 3, 5, 7) # heads were grouped into 4 groups and given a depthwise conv after the queries / keys / values projection
     ):
         super().__init__()
-        assert heads >= 4 and (heads % 4) == 0, 'heads must be greater than 4 and divisible by 4'
+        self.groups = len(ds_conv_kernel_sizes)
+        assert heads >= self.groups and (heads % self.groups) == 0, 'heads must be greater than 4 and divisible by 4'
 
         self.scale = dim_head ** -0.5
+
         self.heads = heads
+        self.heads_per_group = heads // self.groups
+
         inner_dim = heads * dim_head
 
         self.norm = nn.LayerNorm(dim)
@@ -108,7 +112,6 @@ class CausalAttention(nn.Module):
 
         # ds convs with different kernel sizes for 4 groups of heads
 
-        self.groups = len(ds_conv_kernel_sizes)
         self.qkv_ds_convs = nn.ModuleList([])
 
         for _ in range(3): # for queries, keys, values
@@ -119,25 +122,27 @@ class CausalAttention(nn.Module):
                     ds_convs.append(nn.Identity())
                     continue
 
-                ds_convs.append(CausalDepthwiseConv1d(inner_dim, kernel_size))
+                ds_convs.append(CausalDepthwiseConv1d(dim_head * self.heads_per_group, kernel_size))
 
             self.qkv_ds_convs.append(ds_convs)
 
         # learned alibi positional bias for 4 groups of heads
 
-        self.learned_alibi_pos_biases = nn.ModuleList([LearnedAlibiPosBias(heads = heads // self.groups) for _ in range(self.groups)])
+        self.learned_alibi_pos_biases = nn.ModuleList([LearnedAlibiPosBias(heads = self.heads_per_group) for _ in range(self.groups)])
 
         # outward projection
 
         self.to_out = nn.Linear(inner_dim, dim, bias = False)
 
     def forward(self, x):
+        heads_per_group = self.heads_per_group
+
         x = self.norm(x)
         x = rearrange(x, 'b n d -> b d n')
 
         q, k, v = self.to_qkv(x).chunk(3, dim = 1)
 
-        q, k, v = rearrange_many((q, k, v), 'b (h d) n -> b h n d', h = self.heads)
+        q, k, v = rearrange_many((q, k, v), 'b (h d) n -> b h d n', h = self.heads)
 
         # apply causal depthwise conv to queries, keys, values (a la Primer) with different kernel sizes across 4 groups of heads
 
@@ -145,10 +150,11 @@ class CausalAttention(nn.Module):
             projs, ds_convs = args
             batch = projs.shape[0]
 
-            projs = rearrange_many(projs.split(self.heads // self.groups, dim = 1), 'b h n d -> (b h) n d')
+            projs = rearrange_many(projs.split(heads_per_group, dim = 1), 'b h d n -> b (h d) n')
             conv_out = [fn(t) for fn, t in zip(ds_convs, projs)]
-            conv_out = map(lambda t: rearrange(t, '(b h) d n -> b h d n', b = batch), conv_out)
-            return torch.cat(tuple(conv_out), dim = 1)
+            conv_out = map(lambda t: rearrange(t, 'b (h d) n -> b h d n', h = heads_per_group), conv_out)
+            conv_out = torch.cat(tuple(conv_out), dim = 1)
+            return rearrange(conv_out, 'b h d n -> b h n d')
 
         q, k, v = map(apply_causal_ds_conv_to_grouped_heads, zip((q, k, v), self.qkv_ds_convs))
 
@@ -162,7 +168,8 @@ class CausalAttention(nn.Module):
 
         grouped_sims = sim.split(self.heads // self.groups, dim = 1)
         grouped_sims = [(alibi(sim_group) + sim_group) for alibi, sim_group in zip(self.learned_alibi_pos_biases, grouped_sims)]
-        grouped_sims = torch.cat(grouped_sims, dim = 1)
+
+        sim = torch.cat(grouped_sims, dim = 1)
 
         # causal mask
 
