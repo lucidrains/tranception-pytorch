@@ -97,7 +97,7 @@ class CausalAttention(nn.Module):
     ):
         super().__init__()
         self.groups = len(ds_conv_kernel_sizes)
-        assert heads >= self.groups and (heads % self.groups) == 0, 'heads must be greater than 4 and divisible by 4'
+        assert heads >= self.groups and (heads % self.groups) == 0, f'heads must be greater than {self.groups} and divisible by {self.groups}'
 
         self.scale = dim_head ** -0.5
 
