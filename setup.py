@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
   name = 'tranception-pytorch',
   packages = find_packages(exclude=[]),
-  version = '0.0.7',
+  version = '0.0.8',
   license='MIT',
   description = 'Tranception - Pytorch',
   author = 'Phil Wang',
