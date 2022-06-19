@@ -76,23 +76,26 @@ def FeedForward(dim, mult = 4):
         nn.Linear(hidden_dim, dim)
     )
 
-class CausalDepthwiseConv1d(nn.Module):
-    def __init__(self, dim, kernel_size):
+class DepthwiseConv1d(nn.Module):
+    def __init__(self, dim, kernel_size, causal = True):
         super().__init__()
-        self.padding = (kernel_size - 1, 0)
+        assert (kernel_size % 2) == 1
+
+        self.padding = (kernel_size - 1, 0) if causal else (kernel_size // 2, kernel_size // 2)
         self.conv = nn.Conv1d(dim, dim, kernel_size = kernel_size, groups = dim)
 
     def forward(self, x):
         x = F.pad(x, self.padding)
         return self.conv(x)
 
-class CausalAttention(nn.Module):
+class Attention(nn.Module):
     def __init__(
         self,
         *,
         dim,
         heads = 8,
         dim_head = 64,
+        causal = False,
         ds_conv_kernel_sizes = (0, 3, 5, 7) # heads were grouped into 4 groups and given a depthwise conv after the queries / keys / values projection
     ):
         super().__init__()
@@ -100,6 +103,7 @@ class CausalAttention(nn.Module):
         assert heads >= self.groups and (heads % self.groups) == 0, f'heads must be greater than {self.groups} and divisible by {self.groups}'
 
         self.scale = dim_head ** -0.5
+        self.causal = causal
 
         self.heads = heads
         self.heads_per_group = heads // self.groups
@@ -122,7 +126,7 @@ class CausalAttention(nn.Module):
                     ds_convs.append(nn.Identity())
                     continue
 
-                ds_convs.append(CausalDepthwiseConv1d(dim_head * self.heads_per_group, kernel_size))
+                ds_convs.append(DepthwiseConv1d(dim_head * self.heads_per_group, kernel_size, causal = causal))
 
             self.qkv_ds_convs.append(ds_convs)
 
@@ -173,9 +177,10 @@ class CausalAttention(nn.Module):
 
         # causal mask
 
-        i, j = sim.shape[-2:]
-        causal_mask = torch.ones((i, j), dtype = torch.bool, device = device).triu(j - i + 1)
-        sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)
+        if self.causal:
+            i, j = sim.shape[-2:]
+            causal_mask = torch.ones((i, j), dtype = torch.bool, device = device).triu(j - i + 1)
+            sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)
 
         # attention, but of course
 
@@ -199,7 +204,8 @@ class Tranception(nn.Module):
         heads = 8,
         dim_head = 64,
         ff_mult = 4,
-        ds_conv_kernel_sizes = (0, 3, 5, 7)
+        ds_conv_kernel_sizes = (0, 3, 5, 7),
+        causal = True
     ):
         super().__init__()
         self.token_emb = nn.Embedding(num_tokens, dim)
@@ -207,7 +213,7 @@ class Tranception(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                CausalAttention(dim = dim, heads = heads, dim_head = dim_head, ds_conv_kernel_sizes = ds_conv_kernel_sizes),
+                Attention(dim = dim, heads = heads, dim_head = dim_head, ds_conv_kernel_sizes = ds_conv_kernel_sizes, causal = causal),
                 FeedForward(dim, mult = ff_mult)
             ]))
 
