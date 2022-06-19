@@ -135,7 +135,7 @@ class CausalAttention(nn.Module):
         self.to_out = nn.Linear(inner_dim, dim, bias = False)
 
     def forward(self, x):
-        heads_per_group = self.heads_per_group
+        device, heads_per_group = x.device, self.heads_per_group
 
         x = self.norm(x)
         x = rearrange(x, 'b n d -> b d n')
@@ -174,7 +174,7 @@ class CausalAttention(nn.Module):
         # causal mask
 
         i, j = sim.shape[-2:]
-        causal_mask = torch.ones((i, j), dtype = torch.bool).triu(j - i + 1)
+        causal_mask = torch.ones((i, j), dtype = torch.bool, device = device).triu(j - i + 1)
         sim = sim.masked_fill(causal_mask, -torch.finfo(sim.dtype).max)
 
         # attention, but of course
